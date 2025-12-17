@@ -12,12 +12,34 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: {
-    template: '%s | Minha Loja', // Faz títulos dinâmicos (ex: "Produto X | Minha Loja")
-    default: 'Minha Loja Exclusiva',
+  title: "Por Lara Soares | Ateliê de Arte & Cerâmica ", // Nome que vai aparecer no título
+  description: "Peças exclusivas feitas à mão: a delicadeza da cerâmica e a força das telas autorais em um só refúgio criativo.", // Descrição da loja
+  openGraph: {
+    title: "Por Lara Soares",
+    description: "Arte autoral para transformar espaços. Explore nossa coleção de cerâmicas artesanais e telas exclusivas.",
+    url: "https://site-por-lara-soares.vercel.app",
+    siteName: "Por Lara Soares",
+    images: [
+      {
+        url: "/icon21.png", // Nome exato do arquivo que você colocou na pasta public
+        width: 1200,
+        height: 630,
+        alt: "Logo Por Lara Soares",
+      },
+    ],
+    locale: "pt-BR",
+    type: "website",
   },
-  description: "A melhor curadoria de arte e decoração.",
-};
+  // Isso remove o ícone de triângulo (que costuma ser o ícone padrão da Vercel)
+  icons: {
+    icon: [
+      { url: "/icon21.png", sizes: "32x32" },
+      { url: "/icon21.png", sizes: "192x192" }, // Versão maior para alta densidade de pixels
+      { url: "/icon21.png", sizes: "512x512" }, // Versão para telas retina
+    ],
+    apple: "/icon21.png", // Ícone que aparece quando salvam seu site no iPhone
+  },
+}
 
 export default function RootLayout({
   children,
