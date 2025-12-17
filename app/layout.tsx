@@ -32,13 +32,12 @@ export const metadata: Metadata = {
   },
   // Isso remove o ícone de triângulo (que costuma ser o ícone padrão da Vercel)
   icons: {
-    icon: [
-      { url: "/icon21.png", sizes: "32x32" },
-      { url: "/icon21.png", sizes: "192x192" }, // Versão maior para alta densidade de pixels
-      { url: "/icon21.png", sizes: "512x512" }, // Versão para telas retina
-    ],
-    apple: "/icon21.png", // Ícone que aparece quando salvam seu site no iPhone
-  },
+  icon: [
+    { url: "/icon21.png?v=1", sizes: "32x32" }, // Adicionei ?v=1
+    { url: "/icon21.png?v=1", sizes: "192x192" },
+  ],
+  apple: "/icon21.png?v=1",
+},
 }
 
 export default function RootLayout({
