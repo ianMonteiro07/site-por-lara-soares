@@ -1,10 +1,9 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google"; // Fonte mais padrão de mercado
+import { Inter } from "next/font/google";
 import "./globals.css";
 import { Navbar } from "@/components/navbar";
-import { Footer } from "@/components/footer"; // Vamos criar esse componente jaja
+import { Footer } from "@/components/footer";
 
-// Configuração da Fonte Inter
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter",
@@ -12,8 +11,15 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Por Lara Soares | Ateliê de Arte & Cerâmica ", // Nome que vai aparecer no título
-  description: "Peças exclusivas feitas à mão: a delicadeza da cerâmica e a força das telas autorais em um só refúgio criativo.", // Descrição da loja
+  // 1. URL Base para o Next.js não se perder nas imagens
+  metadataBase: new URL('https://site-por-lara-soares.vercel.app'),
+  
+  title: "Por Lara Soares | Ateliê de Arte & Cerâmica",
+  description: "Peças exclusivas feitas à mão: a delicadeza da cerâmica e a força das telas autorais em um só refúgio criativo.",
+  
+  // 2. Referência ao arquivo de manifest que ajuda no SEO
+  manifest: "/manifest.json",
+
   openGraph: {
     title: "Por Lara Soares",
     description: "Arte autoral para transformar espaços. Explore nossa coleção de cerâmicas artesanais e telas exclusivas.",
@@ -21,7 +27,7 @@ export const metadata: Metadata = {
     siteName: "Por Lara Soares",
     images: [
       {
-        url: "/icon21.png", // Nome exato do arquivo que você colocou na pasta public
+        url: "/icon21.png", 
         width: 1200,
         height: 630,
         alt: "Logo Por Lara Soares",
@@ -30,15 +36,18 @@ export const metadata: Metadata = {
     locale: "pt-BR",
     type: "website",
   },
-  // Isso remove o ícone de triângulo (que costuma ser o ícone padrão da Vercel)
+
+  // 3. Configuração de ícones reforçada com versão v=3 para quebrar o cache
   icons: {
-  icon: [
-    { url: "/icon21.png?v=1", sizes: "32x32" }, // Adicionei ?v=1
-    { url: "/icon21.png?v=1", sizes: "192x192" },
-  ],
-  apple: "/icon21.png?v=1",
-},
-}
+    icon: [
+      { url: "/icon21.png?v=3", sizes: "32x32", type: "image/png" },
+      { url: "/icon21.png?v=3", sizes: "192x192", type: "image/png" },
+      { url: "/icon21.png?v=3", sizes: "512x512", type: "image/png" },
+    ],
+    shortcut: "/icon21.png?v=3",
+    apple: "/icon21.png?v=3",
+  },
+};
 
 export default function RootLayout({
   children,
@@ -48,15 +57,12 @@ export default function RootLayout({
   return (
     <html lang="pt-BR" className={inter.variable}>
       <body className="flex min-h-screen flex-col bg-slate-50 text-slate-900 antialiased font-sans">
-        {/* Navbar Fixa no topo ou normal */}
         <Navbar />
         
-        {/* Main ocupando o espaço restante */}
         <main className="flex-grow w-full">
           {children}
         </main>
 
-        {/* Rodapé Profissional */}
         <Footer />
       </body>
     </html>
