@@ -23,7 +23,7 @@ export function Navbar() {
             <Link href="/" className="group flex items-center gap-3">
               <div className="relative h-10 w-10 overflow-hidden rounded-full border border-stone-800/20 group-hover:border-stone-800 transition-colors">
                 <Image 
-                  src="/logo.png"
+                  src="/icon21.png"
                   alt="Logo Por Lara Soares"
                   fill
                   className="object-cover"

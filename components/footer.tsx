@@ -67,8 +67,8 @@ export function Footer() {
             <div className="space-y-4 text-sm text-stone-600">
               <p>Maceió, Alagoas — Enviamos para todo o Brasil.</p>
               
-              <a href="mailto:contato@porlarasoares.com.br" className="block hover:text-stone-900 transition-colors">
-                contato@porlarasoares.com.br
+              <a href="mailto:porlarasoares@gmail.com" className="block hover:text-stone-900 transition-colors">
+                porlarasoares@gmail.com
               </a>
 
               {/* Ícones Sociais */}

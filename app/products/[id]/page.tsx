@@ -50,7 +50,8 @@ export default async function ProductPage(props: {
         {/* COLUNA DA ESQUERDA: SLIDER DE FOTOS */}
         <div className="relative">
           {allImages.length > 0 ? (
-            <div className="rounded-3xl overflow-hidden shadow-2xl bg-[#FFF6DD]">
+            // --- CORREÇÃO AQUI: Adicionado 'relative' nesta div ---
+            <div className="relative rounded-3xl overflow-hidden shadow-2xl bg-[#FFF6DD]">
               {/* Container do Carrossel */}
               <div className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide">
                 {allImages.map((url, index) => (
