@@ -1,17 +1,82 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
-import { createProduct, updateProduct, Product } from '@/lib/products'
+import { updateProduct, Product, createProduct } from '@/lib/products' // Certifique-se que deleteProduct existe no seu lib
 import { Category } from '@/lib/categories'
 import { v4 as uuidv4 } from 'uuid'
+import { Trash2, X } from 'lucide-react' // Instale: npm install lucide-react
 
-export default function ProductForm({ product, categories }: { product?: Product, categories: Category[] }) {
+export default function ProductForm({ product, categories }: { product?: any, categories: Category[] }) {
     const router = useRouter()
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    const [existingImages, setExistingImages] = useState<any[]>([])
     const supabase = createClient()
+
+    // Carregar imagens existentes quando o componente montar
+    useEffect(() => {
+        if (product?.id) {
+            fetchImages()
+        }
+    }, [product])
+
+    async function fetchImages() {
+        const { data } = await supabase
+            .from('product_images')
+            .select('*')
+            .eq('product_id', product.id)
+        if (data) setExistingImages(data)
+    }
+
+    // FUNÇÃO PARA DELETAR UMA IMAGEM ESPECÍFICA
+    async function handleDeleteImage(imageId: string, imageUrl: string) {
+        if (!confirm('Tem certeza que deseja remover esta imagem?')) return
+
+        try {
+            // 1. Remover do Storage
+            const fileName = imageUrl.split('/').pop()
+            if (fileName) {
+                await supabase.storage.from('products').remove([fileName])
+            }
+
+            // 2. Remover do Banco
+            await supabase.from('product_images').delete().eq('id', imageId)
+            
+            // Atualiza a lista na tela
+            setExistingImages(existingImages.filter(img => img.id !== imageId))
+        } catch (err) {
+            alert('Erro ao deletar imagem')
+        }
+    }
+
+    // FUNÇÃO PARA DELETAR O PRODUTO INTEIRO
+    async function handleDeleteProduct() {
+        if (!confirm('TEM CERTEZA? Isso apagará a obra e todas as fotos permanentemente.')) return
+        
+        setLoading(true)
+        try {
+            // Opcional: Deletar fotos do storage antes de apagar o produto
+            const { data: images } = await supabase.from('product_images').select('url').eq('product_id', product.id)
+            if (images) {
+                const filesToDelete = images.map(img => img.url.split('/').pop()).filter(Boolean) as string[]
+                if (filesToDelete.length > 0) {
+                    await supabase.storage.from('products').remove(filesToDelete)
+                }
+            }
+
+            // Deletar o registro do produto (o cascade limpa o resto no banco)
+            const { error: delError } = await supabase.from('products').delete().eq('id', product.id)
+            if (delError) throw delError
+
+            router.push('/admin/products')
+            router.refresh()
+        } catch (err) {
+            setError('Erro ao excluir produto')
+            setLoading(false)
+        }
+    }
 
     async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
         e.preventDefault()
@@ -19,27 +84,18 @@ export default function ProductForm({ product, categories }: { product?: Product
         setError(null)
 
         const formData = new FormData(e.currentTarget)
-        const name = formData.get('name') as string
-        const description = formData.get('description') as string
-        const price = parseFloat(formData.get('price') as string)
-        const stock = parseInt(formData.get('stock') as string)
-        const category_id = formData.get('category_id') as string
-        
-        // Pega todos os arquivos selecionados
         const imageFiles = formData.getAll('image_files') as File[]
 
         try {
             let productId = product?.id
-            let main_image_url = product?.image_url || ''
-
-            // 1. Criar ou Atualizar o produto primeiro
+            
             const productData = {
-                name,
-                description,
-                price,
-                stock,
-                category_id: category_id || null,
-                image_url: main_image_url, 
+                name: formData.get('name') as string,
+                description: formData.get('description') as string,
+                price: parseFloat(formData.get('price') as string),
+                stock: parseInt(formData.get('stock') as string),
+                category_id: (formData.get('category_id') as string) || null,
+                image_url: product?.image_url || '', 
             }
 
             if (product) {
@@ -49,149 +105,112 @@ export default function ProductForm({ product, categories }: { product?: Product
                 productId = newProduct.id
             }
 
-            // 2. Upload das Imagens
-            if (imageFiles.length > 0 && imageFiles[0].size > 0) {
-                const uploadPromises = imageFiles.map(async (file, index) => {
-                    const fileExt = file.name.split('.').pop()
-                    const fileName = `${uuidv4()}.${fileExt}`
+            // Upload de novas imagens
+            const validFiles = imageFiles.filter(f => f.size > 0)
+            if (validFiles.length > 0) {
+                for (const file of validFiles) {
+                    const fileName = `${uuidv4()}.${file.name.split('.').pop()}`
+                    const { error: upErr } = await supabase.storage.from('products').upload(fileName, file)
+                    if (upErr) throw upErr
+
+                    const { data: { publicUrl } } = supabase.storage.from('products').getPublicUrl(fileName)
                     
-                    const { error: uploadError } = await supabase.storage
-                        .from('products')
-                        .upload(fileName, file)
-
-                    if (uploadError) throw uploadError
-
-                    const { data: { publicUrl } } = supabase.storage
-                        .from('products')
-                        .getPublicUrl(fileName)
-
-                    return publicUrl
-                })
-
-                const uploadedUrls = await Promise.all(uploadPromises)
-
-                // 3. Salvar URLs na tabela de imagens extras
-                const imageInserts = uploadedUrls.map(url => ({
-                    product_id: productId,
-                    url: url
-                }))
-
-                const { error: insertError } = await supabase
-                    .from('product_images')
-                    .insert(imageInserts)
-
-                if (insertError) throw insertError
-
-                // Opcional: Se o produto não tinha imagem principal, define a primeira como principal
-                if (!main_image_url && uploadedUrls.length > 0) {
-                    await updateProduct(productId!, { ...productData, image_url: uploadedUrls[0] })
+                    await supabase.from('product_images').insert({ product_id: productId, url: publicUrl })
+                    
+                    // Se não tiver capa, a primeira vira capa
+                    if (!productData.image_url) {
+                        productData.image_url = publicUrl
+                        await updateProduct(productId, productData)
+                    }
                 }
             }
 
             router.push('/admin/products')
             router.refresh()
         } catch (err: any) {
-            setError('Erro ao salvar produto: ' + err.message)
-            console.error(err)
+            setError(err.message)
         } finally {
             setLoading(false)
         }
     }
 
     return (
-        <form onSubmit={handleSubmit} className="max-w-2xl space-y-4 bg-white p-6 rounded-lg shadow">
-            {error && <div className="text-red-500 mb-4">{error}</div>}
+        <div className="max-w-2xl mx-auto">
+            <form onSubmit={handleSubmit} className="space-y-6 bg-white p-8 rounded-xl shadow-sm border border-gray-100">
+                {error && <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm">{error}</div>}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="col-span-1 md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700">Nome da Obra</label>
-                    <input
-                        name="name"
-                        defaultValue={product?.name}
-                        required
-                        className="mt-1 block w-full rounded-md border p-2 border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    />
-                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Campos de Nome, Preço e Estoque (iguais ao anterior) */}
+                    <div className="col-span-full">
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Nome da Obra</label>
+                        <input name="name" defaultValue={product?.name} required className="w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500 outline-none" />
+                    </div>
 
-                <div>
-                    <label className="block text-sm font-medium text-gray-700">Preço (R$)</label>
-                    <input
-                        name="price"
-                        type="number"
-                        step="0.01"
-                        defaultValue={product?.price}
-                        required
-                        className="mt-1 block w-full rounded-md border p-2 border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    />
-                </div>
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Preço</label>
+                        <input name="price" type="number" step="0.01" defaultValue={product?.price} required className="w-full p-2 border rounded-md" />
+                    </div>
 
-                <div>
-                    <label className="block text-sm font-medium text-gray-700">Estoque</label>
-                    <input
-                        name="stock"
-                        type="number"
-                        defaultValue={product?.stock}
-                        required
-                        className="mt-1 block w-full rounded-md border p-2 border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    />
-                </div>
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Estoque</label>
+                        <input name="stock" type="number" defaultValue={product?.stock} required className="w-full p-2 border rounded-md" />
+                    </div>
 
-                <div className="col-span-1 md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700">Categoria</label>
-                    <select
-                        name="category_id"
-                        defaultValue={product?.category_id || ''}
-                        className="mt-1 block w-full rounded-md border p-2 border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    >
-                        <option value="">Selecione uma categoria...</option>
-                        {categories.map((cat) => (
-                            <option key={cat.id} value={cat.id}>{cat.name}</option>
-                        ))}
-                    </select>
-                </div>
-
-                <div className="col-span-1 md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700">Fotos (Selecione várias se desejar)</label>
-                    {product?.image_url && (
-                        <div className="mb-2">
-                            <p className="text-xs text-gray-400 mb-1">Imagem Principal Atual:</p>
-                            <img src={product.image_url} alt="Principal" className="h-20 w-20 object-cover rounded border" />
+                    {/* GERENCIAMENTO DE IMAGENS JÁ EXISTENTES */}
+                    <div className="col-span-full">
+                        <label className="block text-sm font-bold text-gray-700 mb-3">Fotos Atuais</label>
+                        <div className="grid grid-cols-4 gap-4 mb-4">
+                            {/* Capa Principal */}
+                            {product?.image_url && (
+                                <div className="relative aspect-square rounded-lg overflow-hidden border-2 border-blue-500">
+                                    <img src={product.image_url} className="w-full h-full object-cover" alt="Capa" />
+                                    <div className="absolute top-0 left-0 bg-blue-500 text-white text-[8px] px-1 font-bold uppercase">Capa</div>
+                                </div>
+                            )}
+                            {/* Fotos Extras */}
+                            {existingImages.map((img) => (
+                                <div key={img.id} className="relative aspect-square rounded-lg overflow-hidden border group">
+                                    <img src={img.url} className="w-full h-full object-cover" />
+                                    <button 
+                                        type="button"
+                                        onClick={() => handleDeleteImage(img.id, img.url)}
+                                        className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                                    >
+                                        <X size={12} />
+                                    </button>
+                                </div>
+                            ))}
                         </div>
+
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Adicionar Novas Fotos</label>
+                        <input type="file" name="image_files" accept="image/*" multiple className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
+                    </div>
+
+                    <div className="col-span-full">
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Descrição</label>
+                        <textarea name="description" defaultValue={product?.description} rows={4} className="w-full p-2 border rounded-md" />
+                    </div>
+                </div>
+
+                <div className="flex flex-col gap-3 pt-4">
+                    <button type="submit" disabled={loading} className="w-full bg-slate-900 text-white py-3 rounded-lg font-bold hover:bg-slate-800 disabled:opacity-50">
+                        {loading ? 'Salvando...' : product ? 'Salvar Alterações' : 'Publicar Obra'}
+                    </button>
+
+                    {/* BOTÃO DE EXCLUIR PRODUTO */}
+                    {product && (
+                        <button 
+                            type="button" 
+                            onClick={handleDeleteProduct}
+                            disabled={loading}
+                            className="w-full border border-red-200 text-red-500 py-3 rounded-lg font-medium hover:bg-red-50 transition flex items-center justify-center gap-2"
+                        >
+                            <Trash2 size={18} />
+                            Excluir Obra Permanentemente
+                        </button>
                     )}
-                    <input
-                        type="file"
-                        name="image_files"
-                        accept="image/*"
-                        multiple // PERMITE VÁRIAS FOTOS
-                        className="mt-1 block w-full text-sm text-gray-500
-                        file:mr-4 file:py-2 file:px-4
-                        file:rounded-md file:border-0
-                        file:text-sm file:font-semibold
-                        file:bg-blue-50 file:text-blue-700
-                        hover:file:bg-blue-100"
-                    />
                 </div>
-
-                <div className="col-span-1 md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700">Descrição</label>
-                    <textarea
-                        name="description"
-                        defaultValue={product?.description || ''}
-                        rows={3}
-                        className="mt-1 block w-full rounded-md border p-2 border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    />
-                </div>
-            </div>
-
-            <div className="pt-4">
-                <button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full bg-slate-900 text-white py-2 px-4 rounded hover:bg-slate-700 disabled:opacity-50 transition-colors"
-                >
-                    {loading ? 'Salvando Obra...' : product ? 'Atualizar Obra' : 'Criar Obra'}
-                </button>
-            </div>
-        </form>
+            </form>
+        </div>
     )
 }
